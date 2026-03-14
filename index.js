@@ -1,10 +1,10 @@
 require('dotenv').config();
 const { Client, GatewayIntentBits, Collection } = require('discord.js');
 const cron = require('node-cron');
-const { checkAllFeeds } = require('./src/feedChecker');
-const { loadSeen, saveSeen } = require('./src/storage');
-const { registerCommands } = require('./src/commands');
-const { log } = require('./src/logger');
+const { checkAllFeeds } = require('./feedChecker');
+const { loadSeen, saveSeen } = require('./storage');
+const { registerCommands } = require('./commands');
+const { log } = require('./logger');
 
 const client = new Client({
   intents: [
@@ -16,31 +16,22 @@ const client = new Client({
 client.commands = new Collection();
 
 client.once('ready', async () => {
-  log(`✅ Bot online as ${client.user.tag}`);
-
-  // Load commands
+  log(`Bot online as ${client.user.tag}`);
   await registerCommands(client);
-
-  // Load previously seen items from disk
   await loadSeen();
+  log('Seeding existing articles...');
+  await checkAllFeeds(client, true);
+  log('Seeding complete. Now watching for NEW announcements...');
 
-  // Seed existing articles on startup so we don't flood with old posts
-  log('⏳ Seeding existing articles...');
-  await checkAllFeeds(client, true); // true = seed mode (no posting)
-  log('✅ Seeding complete. Now watching for NEW announcements...');
-
-  // Check feeds every 10 minutes
   cron.schedule('*/10 * * * *', async () => {
-    log('🔍 Checking feeds...');
+    log('Checking feeds...');
     await checkAllFeeds(client, false);
-    await saveSeen(); // Persist after each check
+    await saveSeen();
   });
 
-  // Save seen items every hour as backup
   cron.schedule('0 * * * *', saveSeen);
 });
 
-// Handle slash commands
 client.on('interactionCreate', async (interaction) => {
   if (!interaction.isChatInputCommand()) return;
   const command = client.commands.get(interaction.commandName);
@@ -48,8 +39,8 @@ client.on('interactionCreate', async (interaction) => {
   try {
     await command.execute(interaction, client);
   } catch (err) {
-    log(`❌ Command error: ${err.message}`, 'error');
-    const msg = { content: '❌ Something went wrong.', ephemeral: true };
+    log(`Command error: ${err.message}`, 'error');
+    const msg = { content: 'Something went wrong.', ephemeral: true };
     interaction.replied ? interaction.followUp(msg) : interaction.reply(msg);
   }
 });
